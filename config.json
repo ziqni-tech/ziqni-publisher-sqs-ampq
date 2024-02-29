@@ -1,0 +1,10 @@
+{
+    "rabbitConnectionUrl": "amqps://rabbitmq-broker.ziqni.com:5671/your-vhosts",
+    "rabbitExchange": "your-exchange",
+    "rabbitUser": "your-rabbit-user",
+    "rabbitPass": "your-rabbit-pass",
+    "sqsQueueUrl": "your-sqs-url",
+    "sqsRegion": "eu-central-1",
+    "sqsAccessKeyId": "your-sqs-access-key-id",
+    "sqsAccessKey": "your-sqs-access-key"
+}
