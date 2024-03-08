@@ -15,11 +15,32 @@ const port = process.env.PORT || 3000,
     fs = require('fs'),
     html = fs.readFileSync('index.html');
 
-
-const server = http.createServer(function (req, res) {
-    res.writeHead(200);
-    res.write(html);
-    res.end();
+const server = http.createServer(async function (req, res) {
+    if (req.url === '/stats') {
+        const stats = {
+            sqs: {
+                queue: config.sqsQueueUrl,
+                status: poller.isPolling ? 'Connected' : 'Disconnected',
+                startedAt: poller.startedAt ? poller.startedAt.toString() : '',
+                lastMessageReceived: poller.lastMessageReceived ? poller.lastMessageReceived.toString() : '',
+                messagesProcessed: poller.messagesProcessed
+            },
+            rabbit: {
+                status: publisher.isConnected() ? 'Connected' : 'Disconnected',
+                startedAt: publisher.startedAt ? publisher.startedAt.toString() : '',
+                messagesProcessed: publisher.messagesProcessed,
+                exchange: config.rabbitExchange,
+                lastMessageSent: publisher.lastMessageSent ? publisher.lastMessageSent.toString() : '',
+                routingKey: 'events' // Assuming fixed routing key for all messages
+            },
+        };
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify(stats));
+    } else {
+        res.writeHead(200);
+        res.write(html);
+        res.end();
+    }
 });
 
 // Listen on port 3000, IP defaults to 127.0.0.1

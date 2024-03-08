@@ -26,11 +26,17 @@ class SQSPoller {
             endpoint: this.queueUrl,
         });
 
+        // Add variables to track time
+        this.startedAt = new Date();
+        this.lastMessageReceived = null;
+
+        this.messagesProcessed = 0;
+
+        this.messageBuffer = [];
+
         // Flag to control the execution of the polling cycle
         this.isPolling = true;
     }
-
-
 
     async pollForMessages() {
         try {
@@ -42,30 +48,32 @@ class SQSPoller {
 
             while (this.isPolling) {
                 try {
-                    // Creating an intentional error to check reconnection
-                    // if (Math.random() < 0.5) { // Example: 50% probability
-                    //     throw new Error('Intentional error occurred');
-                    // }
-
                     const command = new ReceiveMessageCommand(receiveParams);
                     const data = await this.client.send(command);
 
                     if (data.Messages && data.Messages.length > 0) {
                         for (const message of data.Messages) {
+                            this.lastMessageReceived = new Date();
 
                             // Process the message here...
-                            await this.rabbitMQPublisher.publishMessage(message.Body, 'events')
-                              .then(r => {
-                                  // Delete the message from the queue
-                                  this.deleteMessage(message.ReceiptHandle);
-                              })
-                              .catch(error => {
-                                  console.error('SQS ::: Error occurred while publishing to RabbitMQ', error);
-                              });
+                            if (this.rabbitMQPublisher.isConnected()) {
+                                await this.rabbitMQPublisher.publishMessage(message.Body, 'events')
+                                  .then(r => {
+                                      this.deleteMessage(message.ReceiptHandle);
+                                      this.messagesProcessed++;
+                                  })
+                                  .catch(error => {
+                                      console.error('SQS ::: Error occurred while publishing to RabbitMQ', error);
+                                  });
+                            } else {
+                                // If there is no active connection, add the message to the buffer
+                                this.messageBuffer.push(message);
+                            }
                         }
                     } else {
                         console.log('SQS ::: No messages available.');
                     }
+                    console.groupEnd()
                 } catch (error) {
                     console.error('SQS ::: Error occurred while receiving messages:', error);
 
@@ -105,6 +113,23 @@ class SQSPoller {
                 region: this.region,
                 endpoint: this.queueUrl,
             });
+
+            // Sending buffered messages after successful reconnection
+            if (this.messageBuffer.length > 0) {
+                console.log(`SQS ::: Sending ${this.messageBuffer.length} messages from buffer after reconnection.`);
+                for (const message of this.messageBuffer) {
+                    await this.rabbitMQPublisher.publishMessage(message.Body, 'events')
+                      .then(r => {
+                          this.deleteMessage(message.ReceiptHandle);
+                          this.messagesProcessed++;
+                      })
+                      .catch(error => {
+                          console.error('SQS ::: Error occurred while publishing to RabbitMQ', error);
+                      });
+                }
+                // Clearing the buffer after sending messages
+                this.messageBuffer = [];
+            }
             console.log('SQS ::: Reconnected successfully.');
         } catch (error) {
             console.error('SQS ::: Error occurred while reconnecting:', error);
