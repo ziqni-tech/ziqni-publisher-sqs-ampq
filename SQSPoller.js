@@ -36,7 +36,7 @@ class SQSPoller {
         try {
             const receiveParams = {
                 QueueUrl: this.queueUrl,
-                MaxNumberOfMessages: 10, // Adjust as needed
+                MaxNumberOfMessages: 50, // Adjust as needed
                 WaitTimeSeconds: 20 // Adjust as needed
             };
 
