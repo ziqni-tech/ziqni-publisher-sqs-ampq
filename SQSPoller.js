@@ -37,7 +37,7 @@ class SQSPoller {
             const receiveParams = {
                 QueueUrl: this.queueUrl,
                 MaxNumberOfMessages: 50, // Adjust as needed
-                WaitTimeSeconds: 20 // Adjust as needed
+                WaitTimeSeconds: 5 // Adjust as needed
             };
 
             while (this.isPolling) {
@@ -64,7 +64,7 @@ class SQSPoller {
                               });
                         }
                     } else {
-                        console.log('SQS ::: No messages available.');
+                        
                     }
                 } catch (error) {
                     console.error('SQS ::: Error occurred while receiving messages:', error);
