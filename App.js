@@ -1,18 +1,40 @@
 const config = require('./config.json');
+const winston = require('winston');
+const http = require('http');
+const fs = require('fs');
 
 const log = function (entry) {
     fs.appendFileSync('/tmp/ziqni-webhook-app.log', new Date().toISOString() + ' - ' + entry + '\n');
 };
 
+const logDirectory = './tmp';
+if (!fs.existsSync(logDirectory)) {
+    fs.mkdirSync(logDirectory);
+}
+
+const logger = winston.createLogger({
+    level: 'info',
+    format: winston.format.combine(
+      winston.format.timestamp({
+          format: 'YYYY-MM-DD HH:mm:ss'
+      }),
+      winston.format.errors({ stack: true }),
+      winston.format.splat(),
+      winston.format.json()
+    ),
+    defaultMeta: { service: 'ziqni-webhook-app' },
+    transports: [
+        new winston.transports.File({ filename: './tmp/ziqni-webhook-app.log' })
+    ]
+});
+
 const RabbitMQPublisher = require('./RabbitMQPublisher');
-const publisher = new RabbitMQPublisher(config.rabbitConnectionUrl, config.rabbitExchange, config.rabbitUser, config.rabbitPass, log);
+const publisher = new RabbitMQPublisher(config.rabbitConnectionUrl, config.rabbitExchange, config.rabbitUser, config.rabbitPass, logger);
 
 const SQSPoller = require('./SQSPoller');
-const poller = new SQSPoller(config.sqsAccessKeyId, config.sqsAccessKey, config.sqsQueueUrl, config.sqsRegion, publisher);
+const poller = new SQSPoller(config.sqsAccessKeyId, config.sqsAccessKey, config.sqsQueueUrl, config.sqsRegion, publisher, logger);
 
 const port = process.env.PORT || 3000,
-    http = require('http'),
-    fs = require('fs'),
     html = fs.readFileSync('index.html');
 
 const server = http.createServer(async function (req, res) {
@@ -48,24 +70,25 @@ server.listen(port);
 
 // Put a friendly message on the terminal
 console.log('HTTP ::: Server running at http://127.0.0.1:' + port + '/');
+logger.info('HTTP ::: Server running at http://127.0.0.1:' + port + '/');
 
 // Start the RabbitMQ ::: publisher and SQS poller
-console.log('RabbitMQ ::: Start initializing RabbitMQ ::: publisher...');
+logger.info('RabbitMQ ::: Start initializing RabbitMQ ::: publisher...');
 publisher.init()
     .then(data => {
-        console.log('RabbitMQ ::: Publisher initialized.');
+        logger.info('RabbitMQ ::: Publisher initialized.');
         beginPolling();
     })
     .catch(error => {
-        console.error('RabbitMQ ::: Error occurred while initializing RabbitMQ ::: publisher:', error);
+        logger.error('RabbitMQ ::: Error occurred while initializing RabbitMQ ::: publisher:', error);
     });
 
 function beginPolling(){
     // Start polling for messages from SQS and publishing to RabbitMQ
-    console.log('SQS ::: Start polling for messages from SQS ' + config.sqsQueueUrl + ' and publishing to RabbitMQ ::: exchange ' + config.rabbitExchange + '...');
+    logger.info('SQS ::: Start polling for messages from SQS ' + config.sqsQueueUrl + ' and publishing to RabbitMQ ::: exchange ' + config.rabbitExchange + '...');
     poller.pollForMessages().then(r => {
-        publisher.close().then(r => console.log('RabbitMQ ::: publisher closed.') );
-        console.log('SQS ::: polling for messages completed.');
+        publisher.close().then(r => logger.info('RabbitMQ ::: publisher closed.') );
+        logger.info('SQS ::: polling for messages completed.');
     });
 }
 

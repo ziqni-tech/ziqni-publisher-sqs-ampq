@@ -4,7 +4,8 @@
   "private": true,
   "dependencies": {
     "@aws-sdk/client-sqs": ">=3.523.0",
-    "amqplib": ">=0.10.3"
+    "amqplib": ">=0.10.3",
+    "winston": "^3.12.0"
   },
   "scripts": {
     "start": "node App.js"

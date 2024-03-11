@@ -9,11 +9,12 @@ class SQSPoller {
     accessKeyId;
     accessKey;
 
-    constructor(accessKeyId, accessKey, queueUrl, region, rabbitMQPublisher, pollIntervalMs = 1000) {
+    constructor(accessKeyId, accessKey, queueUrl, region, rabbitMQPublisher, logger, pollIntervalMs = 1000) {
         this.accessKeyId = accessKeyId;
         this.accessKey = accessKey;
         this.queueUrl = queueUrl;
         this.region = region;
+        this.logger = logger;
         this.pollIntervalMs = pollIntervalMs;
         this.rabbitMQPublisher = rabbitMQPublisher;
 
@@ -54,7 +55,6 @@ class SQSPoller {
                     if (data.Messages && data.Messages.length > 0) {
                         for (const message of data.Messages) {
                             this.lastMessageReceived = new Date();
-
                             // Process the message here...
                             if (this.rabbitMQPublisher.isConnected()) {
                                 await this.rabbitMQPublisher.publishMessage(message.Body, 'events')
@@ -63,7 +63,7 @@ class SQSPoller {
                                       this.messagesProcessed++;
                                   })
                                   .catch(error => {
-                                      console.error('SQS ::: Error occurred while publishing to RabbitMQ', error);
+                                      this.logger.error('SQS ::: Error occurred while publishing to RabbitMQ', error);
                                   });
                             } else {
                                 // If there is no active connection, add the message to the buffer
@@ -71,11 +71,10 @@ class SQSPoller {
                             }
                         }
                     } else {
-                        console.log('SQS ::: No messages available.');
+                        this.logger.info('SQS ::: No messages available.');
                     }
-                    console.groupEnd()
                 } catch (error) {
-                    console.error('SQS ::: Error occurred while receiving messages:', error);
+                    this.logger.error('SQS ::: Error occurred while receiving messages:', error);
 
                     // Handle disconnection or errors and attempt reconnection
                     await this.reconnect();
@@ -84,7 +83,7 @@ class SQSPoller {
                 await new Promise(resolve => setTimeout(resolve, this.pollIntervalMs));
             }
         } catch (error) {
-            console.error('SQS ::: Error occurred while polling for messages:', error);
+            this.logger.error('SQS ::: Error occurred while polling for messages:', error);
         }
     }
 
@@ -97,12 +96,11 @@ class SQSPoller {
             const command = new DeleteMessageCommand(deleteParams);
             await this.client.send(command);
         } catch (error) {
-            console.error('SQS ::: Error occurred while deleting message from the queue:', error);
+            this.logger.error('SQS ::: Error occurred while deleting message from the queue:', error);
         }
     }
 
     async reconnect() {
-        console.log('SQS ::: Reconnecting...');
         try {
             // Reinitialize SQS client
             this.client = new SQSClient({
@@ -116,7 +114,7 @@ class SQSPoller {
 
             // Sending buffered messages after successful reconnection
             if (this.messageBuffer.length > 0) {
-                console.log(`SQS ::: Sending ${this.messageBuffer.length} messages from buffer after reconnection.`);
+                this.logger.info(`SQS ::: Sending ${this.messageBuffer.length} messages from buffer after reconnection.`);
                 for (const message of this.messageBuffer) {
                     await this.rabbitMQPublisher.publishMessage(message.Body, 'events')
                       .then(r => {
@@ -130,9 +128,9 @@ class SQSPoller {
                 // Clearing the buffer after sending messages
                 this.messageBuffer = [];
             }
-            console.log('SQS ::: Reconnected successfully.');
+            this.logger.info('SQS ::: Reconnected successfully.');
         } catch (error) {
-            console.error('SQS ::: Error occurred while reconnecting:', error);
+            this.logger.error('SQS ::: Error occurred while reconnecting:', error);
         }
     }
 }

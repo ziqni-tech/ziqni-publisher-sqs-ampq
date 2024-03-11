@@ -8,14 +8,14 @@ class RabbitMQPublisher {
     password;
     channel;
     connection;
-    log;
+    logger;
 
-    constructor(connectionUrl, exchangeName, username, password, log) {
+    constructor(connectionUrl, exchangeName, username, password, logger) {
         this.connectionUrl = connectionUrl;
         this.exchangeName = exchangeName;
         this.username = username;
         this.password = password;
-        this.log = log;
+        this.logger = logger;
 
         this.startedAt = new Date();
         this.lastMessageSent = null;
@@ -31,7 +31,7 @@ class RabbitMQPublisher {
     async init() {
         const opt = { credentials: require('amqplib').credentials.plain(this.username, this.password) };
         this.connection = await amqp.connect(this.connectionUrl, opt, (err, conn) => {
-            this.log("RabbitMQ :::  [*] Failed to connect %s", err);
+            this.logger.error("RabbitMQ :::  [*] Failed to connect %s", err);
         });
 
         this.channel = await this.connection.createChannel();
@@ -48,7 +48,7 @@ class RabbitMQPublisher {
             await this.channel.close();
             await this.connection.close();
         } catch (error) {
-            console.error('RabbitMQ ::: Error occurred while closing the RabbitMQ publisher:', error);
+            this.logger.error('RabbitMQ ::: Error occurred while closing the RabbitMQ publisher:', error);
         }
     }
 
@@ -66,14 +66,13 @@ class RabbitMQPublisher {
             }
             return true;
         } catch (error) {
-            console.error('Error occurred while publishing message:', error);
+            this.logger.error('Error occurred while publishing message:', error);
             await this.reconnectToRabbitMQ();
             return false;
         }
     }
 
     async reconnectToRabbitMQ() {
-        console.log('RabbitMQ ::: Reconnecting to RabbitMQ...');
         try {
             // Close existing channel and connection
             await this.close();
@@ -83,7 +82,7 @@ class RabbitMQPublisher {
             this.connection = await amqp.connect(this.connectionUrl, opt);
             this.channel = await this.connection.createChannel();
             await this.channel.assertExchange(this.exchangeName, 'direct', { durable: true, xQueueMode: 'default' });
-            console.log('RabbitMQ ::: Successfully reconnected to RabbitMQ.');
+            this.logger.info('RabbitMQ ::: Successfully reconnected to RabbitMQ.');
 
             // Sending messages from the buffer after a successful reconnection
             for (const { message, routingKey } of this.messageBuffer) {
@@ -94,7 +93,7 @@ class RabbitMQPublisher {
             // Clear the buffer after sending all messages
             this.messageBuffer = [];
         } catch (error) {
-            console.error('RabbitMQ ::: Error occurred while reconnecting to RabbitMQ:', error);
+            this.logger.error('RabbitMQ ::: Error occurred while reconnecting to RabbitMQ:', error);
         }
     }
 }
